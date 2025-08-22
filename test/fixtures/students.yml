@@ -1,0 +1,43 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  student_type: 1
+  first_name: MyString
+  last_name: MyString
+  birthday: 2025-08-22
+  instrument_preference: MyString
+  gender: 1
+  experience_years: 1
+  current_school_name: MyString
+  current_school_offers_arts: false
+  ethnicity: 1
+  email: MyString
+  phone_number: MyString
+  home_address: MyString
+  city: MyString
+  state: MyString
+  postal_code: MyString
+  household_size: 1
+  household_income: 1
+  heard_about: 1
+
+two:
+  student_type: 1
+  first_name: MyString
+  last_name: MyString
+  birthday: 2025-08-22
+  instrument_preference: MyString
+  gender: 1
+  experience_years: 1
+  current_school_name: MyString
+  current_school_offers_arts: false
+  ethnicity: 1
+  email: MyString
+  phone_number: MyString
+  home_address: MyString
+  city: MyString
+  state: MyString
+  postal_code: MyString
+  household_size: 1
+  household_income: 1
+  heard_about: 1
