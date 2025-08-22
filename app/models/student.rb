@@ -68,9 +68,12 @@ class Student < ApplicationRecord
               :household_size, :household_income, :heard_about, presence: true
   end
 
-  with_options if: :child? do
-    validates :current_school_name, :current_school_offers_arts, presence: true
-    validates :email, :phone_number, :home_address, :city, :state, :postal_code,
-              :household_size, :household_income, :heard_about, presence: true
-  end
+with_options if: :child? do
+  validates :current_school_name, presence: true
+  # Boolean must be either true or false (not nil)
+  validates :current_school_offers_arts, inclusion: { in: [true, false] }
+  validates :email, :phone_number, :home_address, :city, :state, :postal_code,
+            :household_size, :household_income, :heard_about, presence: true
+end
+
 end
