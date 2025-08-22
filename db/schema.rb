@@ -28,16 +28,16 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_22_212126) do
   end
 
   create_table "students", force: :cascade do |t|
-    t.integer "student_type"
-    t.string "first_name"
-    t.string "last_name"
+    t.integer "student_type", null: false
+    t.string "first_name", null: false
+    t.string "last_name", null: false
     t.date "birthday"
     t.string "instrument_preference"
-    t.integer "gender"
-    t.integer "experience_years"
+    t.integer "gender", default: 3, null: false
+    t.integer "experience_years", default: 0, null: false
     t.string "current_school_name"
     t.boolean "current_school_offers_arts"
-    t.integer "ethnicity"
+    t.integer "ethnicity", default: 6, null: false
     t.string "email"
     t.string "phone_number"
     t.string "home_address"
@@ -49,6 +49,9 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_22_212126) do
     t.integer "heard_about"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.index ["email"], name: "index_students_on_email"
+    t.index ["last_name", "first_name"], name: "index_students_on_last_name_and_first_name"
+    t.index ["student_type"], name: "index_students_on_student_type"
   end
 
   add_foreign_key "parent_contacts", "students"
