@@ -94,6 +94,8 @@ GEM
     drb (2.2.3)
     erb (5.0.2)
     erubi (1.13.1)
+    faker (3.5.2)
+      i18n (>= 1.8.11, < 2)
     globalid (1.2.1)
       activesupport (>= 6.1)
     i18n (1.14.7)
@@ -232,6 +234,7 @@ PLATFORMS
 DEPENDENCIES
   bootsnap
   debug
+  faker (~> 3.4)
   puma (>= 5.0)
   rack-cors
   rails (~> 7.1.5, >= 7.1.5.2)

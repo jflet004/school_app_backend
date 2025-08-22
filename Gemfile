@@ -40,8 +40,13 @@ group :development, :test do
   gem "debug", platforms: %i[ mri windows ]
 end
 
+# Faker
+group :development, :test do
+  gem "faker", "~> 3.4"
+end
+
+
 group :development do
   # Speed up commands on slow machines / big apps [https://github.com/rails/spring]
   # gem "spring"
 end
-
