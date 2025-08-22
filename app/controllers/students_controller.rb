@@ -1,10 +1,45 @@
 class StudentsController < ApplicationController
   before_action :set_student, only: [:show, :update, :destroy]
 
-  def index
-    students = Student.includes(:parent_contacts).order(created_at: :desc)
-    render json: students.as_json(include: :parent_contacts)
-  end
+def index
+  # Params (all optional):
+  # page, per_page, q, student_type, gender, ethnicity, experience_years, heard_about, sort, direction
+  page      = params.fetch(:page, 1).to_i
+  per_page  = [[params.fetch(:per_page, 20).to_i, 1].max, 100].min # cap at 100
+  sort      = params[:sort].presence_in(%w[created_at name]) || "created_at"
+  direction = params[:direction].to_s.downcase == "asc" ? :asc : :desc
+
+  scope = Student.includes(:parent_contacts)
+                 .search(params[:q])
+                 .filter_student_type(params[:student_type])
+                 .filter_gender(params[:gender])
+                 .filter_ethnicity(params[:ethnicity])
+                 .filter_experience(params[:experience_years])
+                 .filter_heard_about(params[:heard_about])
+
+  # Sorting
+  scope = if sort == "name"
+            scope.order(last_name: direction, first_name: direction, id: :asc)
+          else
+            scope.order(created_at: direction, id: :asc)
+          end
+
+  total       = scope.count
+  total_pages = (total / per_page.to_f).ceil
+  offset      = (page - 1) * per_page
+  students    = scope.offset(offset).limit(per_page)
+
+  render json: {
+    data: students.as_json(include: :parent_contacts),
+    meta: {
+      page: page,
+      per_page: per_page,
+      total: total,
+      total_pages: total_pages
+    }
+  }
+end
+
 
   def show
     render json: @student.as_json(include: :parent_contacts)
