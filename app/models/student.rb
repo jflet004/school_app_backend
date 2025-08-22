@@ -76,4 +76,25 @@ with_options if: :child? do
             :household_size, :household_income, :heard_about, presence: true
 end
 
+# Simple "like" search across first/last name
+scope :search, ->(term) {
+  next all if term.blank?
+  where("first_name LIKE :q OR last_name LIKE :q", q: "%#{sanitize_sql_like(term)}%")
+}
+
+# Filter helpers for enum-backed fields (accepts string enum keys)
+scope :filter_enum, ->(attr, value) {
+  next all if value.blank?
+  # Safely map string value to enum integer; ignore if invalid
+  enum_map = public_send(attr.to_s.pluralize)
+  return none unless enum_map.key?(value.to_s) # unknown value
+  where(attr => value)
+}
+
+scope :filter_student_type,   ->(v) { filter_enum(:student_type, v) }
+scope :filter_gender,         ->(v) { filter_enum(:gender, v) }
+scope :filter_ethnicity,      ->(v) { filter_enum(:ethnicity, v) }
+scope :filter_experience,     ->(v) { filter_enum(:experience_years, v) }
+scope :filter_heard_about,    ->(v) { filter_enum(:heard_about, v) }
+
 end
