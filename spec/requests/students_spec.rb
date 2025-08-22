@@ -72,7 +72,7 @@ RSpec.describe "Students API", type: :request do
 
       post "/students", params: payload
 
-      expect(response).to have_http_status(:unprocessable_entity)
+      expect(response).to have_http_status(:unprocessable_content)
       expect(json["errors"].join).to match(/Current school offers arts/i)
     end
 

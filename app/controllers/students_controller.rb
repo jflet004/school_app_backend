@@ -15,7 +15,7 @@ class StudentsController < ApplicationController
     if student.save
       render json: student.as_json(include: :parent_contacts), status: :created
     else
-      render json: { errors: student.errors.full_messages }, status: :unprocessable_entity
+      render json: { errors: student.errors.full_messages }, status: :unprocessable_content
     end
   end
 
@@ -23,7 +23,7 @@ class StudentsController < ApplicationController
     if @student.update(student_params)
       render json: @student.as_json(include: :parent_contacts)
     else
-      render json: { errors: @student.errors.full_messages }, status: :unprocessable_entity
+      render json: { errors: @student.errors.full_messages }, status: :unprocessable_content
     end
   end
 

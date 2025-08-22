@@ -15,7 +15,7 @@ class ParentContactsController < ApplicationController
     if contact.save
       render json: contact, status: :created
     else
-      render json: { errors: contact.errors.full_messages }, status: :unprocessable_entity
+      render json: { errors: contact.errors.full_messages }, status: :unprocessable_content
     end
   end
 
@@ -23,7 +23,7 @@ class ParentContactsController < ApplicationController
     if @parent_contact.update(parent_contact_params)
       render json: @parent_contact
     else
-      render json: { errors: @parent_contact.errors.full_messages }, status: :unprocessable_entity
+      render json: { errors: @parent_contact.errors.full_messages }, status: :unprocessable_content
     end
   end
 
