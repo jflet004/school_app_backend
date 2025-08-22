@@ -21,7 +21,7 @@ require 'rspec/rails'
 # require only the support files necessary.
 #
 # Rails.root.glob('spec/support/**/*.rb').sort_by(&:to_s).each { |f| require f }
-
+Dir[Rails.root.join("spec/support/**/*.rb")].sort.each { |f| require f }
 # Checks for pending migrations and applies them before tests are run.
 # If you are not using ActiveRecord, you can remove these lines.
 begin
@@ -62,4 +62,19 @@ RSpec.configure do |config|
   config.filter_rails_from_backtrace!
   # arbitrary gems may also be filtered via:
   # config.filter_gems_from_backtrace("gem name")
+
+  # spec/rails_helper.rb (inside RSpec.configure block)
+config.include FactoryBot::Syntax::Methods
+
+# Parse JSON helper for request specs
+config.include(Module.new do
+  def json
+    JSON.parse(response.body)
+  rescue JSON::ParserError
+    {}
+  end
+end, type: :request)
+
+
+
 end
