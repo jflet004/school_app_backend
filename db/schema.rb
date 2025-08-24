@@ -10,13 +10,24 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_08_24_000713) do
-  create_table "courses", force: :cascade do |t|
-    t.string "name"
+ActiveRecord::Schema[7.1].define(version: 2025_08_24_183854) do
+  create_table "course_offerings", force: :cascade do |t|
     t.integer "teacher_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["teacher_id"], name: "index_courses_on_teacher_id"
+    t.integer "course_id", null: false
+    t.index ["course_id"], name: "index_course_offerings_on_course_id"
+    t.index ["teacher_id"], name: "index_course_offerings_on_teacher_id"
+  end
+
+  create_table "courses", force: :cascade do |t|
+    t.string "name", null: false
+    t.integer "course_type", default: 0, null: false
+    t.integer "price_cents", default: 0, null: false
+    t.boolean "active", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_courses_on_name", unique: true
   end
 
   create_table "parent_contacts", force: :cascade do |t|
@@ -73,6 +84,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_24_000713) do
     t.datetime "updated_at", null: false
   end
 
-  add_foreign_key "courses", "teachers"
+  add_foreign_key "course_offerings", "courses"
+  add_foreign_key "course_offerings", "teachers"
   add_foreign_key "parent_contacts", "students"
 end
