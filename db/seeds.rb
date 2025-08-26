@@ -121,3 +121,5 @@ adult_count.times { make_adult_student! }
 
 puts "Done! #{Student.child.count} child students, #{Student.adult.count} adult students."
 puts "Total parent contacts: #{ParentContact.count}"
+
+

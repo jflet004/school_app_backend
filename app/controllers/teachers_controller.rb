@@ -3,30 +3,33 @@ class TeachersController < ApplicationController
 
   # GET /teachers
   # Params: page, per_page, q, sort(name|created_at), direction(asc|desc)
-  def index
-    page      = params.fetch(:page, 1).to_i
-    per_page  = [[params.fetch(:per_page, 20).to_i, 1].max, 100].min
-    sort      = params[:sort].presence_in(%w[created_at name]) || "created_at"
-    direction = params[:direction].to_s.downcase == "asc" ? :asc : :desc
+def index
+  page      = params.fetch(:page, 1).to_i
+  per_page  = [[params.fetch(:per_page, 20).to_i, 1].max, 100].min
+  sort      = params[:sort].presence_in(%w[created_at name]) || "created_at"
+  direction = params[:direction].to_s.downcase == "asc" ? :asc : :desc
 
-    scope = Teacher.includes(:courses).search(params[:q])
+  # 👇 was includes(:courses) — now we eager-load time slots + the canonical course
+  scope = Teacher.includes(course_offerings: :course).search(params[:q])
 
-    scope = if sort == "name"
-              scope.order(last_name: direction, first_name: direction, id: :asc)
-            else
-              scope.order(created_at: direction, id: :asc)
-            end
+  scope = if sort == "name"
+            scope.order(last_name: direction, first_name: direction, id: :asc)
+          else
+            scope.order(created_at: direction, id: :asc)
+          end
 
-    total       = scope.count
-    total_pages = (total / per_page.to_f).ceil
-    offset      = (page - 1) * per_page
-    teachers    = scope.offset(offset).limit(per_page)
+  total       = scope.count
+  total_pages = (total / per_page.to_f).ceil
+  offset      = (page - 1) * per_page
+  teachers    = scope.offset(offset).limit(per_page)
 
-    render json: {
-      data: teachers.as_json(include: :courses),
-      meta: { page: page, per_page: per_page, total: total, total_pages: total_pages }
-    }
-  end
+  render json: {
+    # 👇 include the time slots and their canonical course (for name/price)
+    data: teachers.as_json(include: { course_offerings: { include: :course } }),
+    meta: { page:, per_page:, total:, total_pages: }
+  }
+end
+  
 
   # GET /teachers/:id
   def show
