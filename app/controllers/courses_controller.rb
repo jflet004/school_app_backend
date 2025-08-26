@@ -1,20 +1,42 @@
 class CoursesController < ApplicationController
-  before_action :set_teacher
   before_action :set_course, only: [:show, :update, :destroy]
 
-  # GET /teachers/:teacher_id/courses
+  # GET /courses
+  # Params: page, per_page, q, sort(name|created_at), direction(asc|desc), active(true|false)
   def index
-    render json: @teacher.courses.order(created_at: :desc)
+    page      = params.fetch(:page, 1).to_i
+    per_page  = [[params.fetch(:per_page, 20).to_i, 1].max, 100].min
+    sort      = params[:sort].presence_in(%w[created_at name]) || "created_at"
+    direction = params[:direction].to_s.downcase == "asc" ? :asc : :desc
+
+    scope = Course.all
+    scope = scope.where(active: ActiveModel::Type::Boolean.new.cast(params[:active])) if params.key?(:active)
+    if params[:q].present?
+      q = "%#{Course.sanitize_sql_like(params[:q])}%"
+      scope = scope.where("name LIKE ?", q)
+    end
+
+    scope = (sort == "name") ? scope.order(name: direction, id: :asc) : scope.order(created_at: direction, id: :asc)
+
+    total       = scope.count
+    total_pages = (total / per_page.to_f).ceil
+    offset      = (page - 1) * per_page
+    courses     = scope.offset(offset).limit(per_page)
+
+    render json: {
+      data: courses.as_json(only: [:id, :name, :course_type, :price_cents, :active, :created_at, :updated_at]),
+      meta: { page:, per_page:, total:, total_pages: }
+    }
   end
 
-  # GET /teachers/:teacher_id/courses/:id
+  # GET /courses/:id
   def show
-    render json: @course
+    render json: @course.as_json(include: { course_offerings: { include: :teacher } })
   end
 
-  # POST /teachers/:teacher_id/courses
+  # POST /courses
   def create
-    course = @teacher.courses.build(course_params)
+    course = Course.new(course_params)
     if course.save
       render json: course, status: :created
     else
@@ -22,7 +44,7 @@ class CoursesController < ApplicationController
     end
   end
 
-  # PATCH/PUT /teachers/:teacher_id/courses/:id
+  # PATCH/PUT /courses/:id
   def update
     if @course.update(course_params)
       render json: @course
@@ -31,7 +53,7 @@ class CoursesController < ApplicationController
     end
   end
 
-  # DELETE /teachers/:teacher_id/courses/:id
+  # DELETE /courses/:id
   def destroy
     @course.destroy
     head :no_content
@@ -39,15 +61,11 @@ class CoursesController < ApplicationController
 
   private
 
-  def set_teacher
-    @teacher = Teacher.find(params[:teacher_id])
-  end
-
   def set_course
-    @course = @teacher.courses.find(params[:id])
+    @course = Course.find(params[:id])
   end
 
   def course_params
-    params.require(:course).permit(:name)
+    params.require(:course).permit(:name, :course_type, :price_cents, :active)
   end
 end
