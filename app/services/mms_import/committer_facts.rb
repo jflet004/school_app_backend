@@ -1,7 +1,7 @@
 # app/services/mms_import/committer_facts.rb
 module MmsImport
   class CommitterFacts
-    Result = Struct.new(:facts, :skipped, :errors, keyword_init: true)
+   Result = Struct.new(:facts, :skipped, :errors, :date_from, :date_to, keyword_init: true)
 
     def self.commit(io_path, import_batch_id)
       rows = Parser.preview(io_path, limit: nil)[:rows] # full file
@@ -24,6 +24,10 @@ module MmsImport
           end
 
           on_date = parse_date(date_s) || (raise "Unparsable date #{date_s.inspect}")
+          
+          res.date_from = on_date if res.date_from.nil? || on_date < res.date_from
+          res.date_to   = on_date if res.date_to.nil?   || on_date > res.date_to
+
           start_hhmm, end_hhmm = parse_time_range(time_s, on_date)
 
           status = normalize_attendance(att_raw)

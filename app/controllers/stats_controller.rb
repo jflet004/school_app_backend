@@ -6,6 +6,16 @@ class StatsController < ApplicationController
     to       = params[:to].present?   ? Date.parse(params[:to])   : ImportFact.maximum(:on_date)
     fy_start = params[:fy_start].presence&.to_i || 8 # August default
 
+    if from.nil? || to.nil?
+      return render json: {
+        series: [],
+        totals: { period: nil, sessions: 0, present: 0, absent: 0, unknown: 0 },
+        fiscal_years: {},
+        quarters: {},
+        params: { from:, to:, fy_start: fy_start }
+     }
+    end
+
     return render json: { series: [], total: { sessions: 0 } } unless from && to
 
     scope = ImportFact.where(on_date: from..to)
@@ -15,23 +25,22 @@ class StatsController < ApplicationController
     # SQLite strftime('%Y-%m', on_date) -> "2025-07"
     month_key = Arel.sql("strftime('%Y-%m', on_date) AS period")
 
-present_cnt = Arel.sql("SUM(CASE WHEN attendance_status = 0 THEN 1 ELSE 0 END) AS present")
-absent_cnt  = Arel.sql("SUM(CASE WHEN attendance_status IN (1,2) THEN 1 ELSE 0 END) AS absent")  # include excused if ever used
-unknown_cnt = Arel.sql("SUM(CASE WHEN attendance_status = 3 THEN 1 ELSE 0 END) AS unknown")
-total_cnt   = Arel.sql("COUNT(*) AS sessions")
+  present_cnt = Arel.sql("SUM(CASE WHEN attendance_status = 0 THEN 1 ELSE 0 END) AS present")
+  absent_cnt  = Arel.sql("SUM(CASE WHEN attendance_status IN (1,2) THEN 1 ELSE 0 END) AS absent")  # include excused if ever used
+  unknown_cnt = Arel.sql("SUM(CASE WHEN attendance_status = 3 THEN 1 ELSE 0 END) AS unknown")
+  total_cnt   = Arel.sql("COUNT(*) AS sessions")
 
 
-    rows = scope
-      .select(month_key, present_cnt, absent_cnt, unknown_cnt, total_cnt)
-      .group("strftime('%Y-%m', on_date)")
-      .order("period ASC")
+  rows = scope
+    .select(month_key, present_cnt, absent_cnt, unknown_cnt, total_cnt)
+    .group("strftime('%Y-%m', on_date)")
+    .order("period ASC")
 
-    series = rows.map do |r|
-      { period: r.period, sessions: r.sessions.to_i,
-        present: r.present.to_i, absent: r.absent.to_i, unknown: r.unknown.to_i }
-    end
+  series = rows.map do |r|
+    { period: r.period, sessions: r.sessions.to_i,
+      present: r.present.to_i, absent: r.absent.to_i, unknown: r.unknown.to_i }    end
 
-    def fiscal_quarter_for(year, month, fy_start)
+def fiscal_quarter_for(year, month, fy_start)
   # Map months to 0..11 where fy_start == 0
   offset = (month - fy_start) % 12
   qnum   = (offset / 3) + 1 # 1..4

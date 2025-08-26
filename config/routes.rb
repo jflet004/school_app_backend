@@ -23,7 +23,7 @@ Rails.application.routes.draw do
     member { get :charge } # /enrollments/:id/charge?year=2025&month=9
   end
 
-  resources :import_batches, only: [:create, :show, :destroy] do
+  resources :import_batches, only: [:index, :create, :show, :destroy] do
     member do
       get :preview
       post :commit   # will map/save to students/teachers/etc

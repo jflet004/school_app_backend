@@ -2,6 +2,33 @@
 class ImportBatchesController < ApplicationController
   before_action :set_batch, only: [:show, :preview, :commit]
 
+  def index
+    limit = (params[:limit] || 100).to_i.clamp(1, 500)
+    batches = ImportBatch.order(created_at: :desc).limit(limit)
+
+    items = batches.map do |b|
+      # fallback: if date_range missing, derive from facts for this batch
+      dr = b.metadata&.dig("date_range")
+      unless dr
+        from = ImportFact.where(import_batch_id: b.id).minimum(:on_date)
+        to   = ImportFact.where(import_batch_id: b.id).maximum(:on_date)
+        dr = (from && to) ? { "from" => from, "to" => to } : nil
+      end
+
+      {
+        id: b.id,
+        filename: b.filename,
+        status: b.status,
+        created_at: b.created_at,
+        mode: b.metadata&.dig("mode") || "facts",
+        date_range: dr,
+        summary: b.metadata&.dig("summary")
+      }
+    end
+
+    render json: { items: items }
+  end
+
   # POST /import_batches  (multipart form with :file)
   def create
     file = params[:file]
@@ -57,28 +84,20 @@ class ImportBatchesController < ApplicationController
     return render json: { error: "batch not found" }, status: :not_found unless @batch
     return render json: { error: "file missing" }, status: :unprocessable_content unless @batch.file.attached?
 
-    # default to facts-only; support ?mode=domain later if we ever want it back
     mode = params[:mode].presence || "facts"
+    result = @batch.file.blob.open { |t| ::MmsImport::CommitterFacts.commit(t.path, @batch.id) }
 
-    result =
-      @batch.file.blob.open do |tempfile|
-        if mode == "facts"
-          ::MmsImport::CommitterFacts.commit(tempfile.path, @batch.id)
-        else
-          ::MmsImport::Committer.commit(tempfile.path) # old domain-upsert path (optional)
-        end
-      end
-
-    summary =
-      if mode == "facts"
-        { facts: result.facts, skipped: result.skipped, errors: result.errors.size }
-      else
-        { courses: result.courses, teachers: result.teachers, offerings: result.offerings,
-          students: result.students, enrollments: result.enrollments,
-          attendance: result.attendance, skipped: result.skipped, errors: result.errors.size }
-      end
-
-    @batch.update!(status: :imported, metadata: { mode: mode, summary: summary, errors: result.errors })
+    summary = { facts: result.facts, skipped: result.skipped, errors: result.errors.size }
+    @batch.update!(
+      status: :imported,
+      metadata: {
+        mode: mode,
+        filename: @batch.filename,
+        date_range: { from: result.date_from, to: result.date_to },
+        summary: summary,
+        errors: result.errors
+      }
+    )
 
     render json: @batch.metadata, status: :ok
   rescue => e
