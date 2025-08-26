@@ -29,4 +29,7 @@ Rails.application.routes.draw do
       post :commit   # will map/save to students/teachers/etc
     end
   end
+
+  get "/stats/attendance", to: "stats#attendance"
+  
 end
