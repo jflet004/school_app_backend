@@ -38,9 +38,15 @@ class StudentsController < ApplicationController
     }
   end
 
-  def show
-    render json: @student.as_json(include: :parent_contacts)
-  end
+def show
+  render json: @student.as_json(
+    include: [
+      :parent_contacts,
+      { enrollments: { include: { course_offering: { include: [:course, :teacher] } } } }
+    ]
+  )
+end
+
 
   def create
     student = Student.new(student_params)
