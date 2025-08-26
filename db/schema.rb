@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_08_24_183854) do
+ActiveRecord::Schema[7.1].define(version: 2025_08_26_023515) do
   create_table "course_offerings", force: :cascade do |t|
     t.integer "teacher_id", null: false
     t.datetime "created_at", null: false
@@ -28,6 +28,21 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_24_183854) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["name"], name: "index_courses_on_name", unique: true
+  end
+
+  create_table "enrollments", force: :cascade do |t|
+    t.integer "course_offering_id", null: false
+    t.integer "student_id", null: false
+    t.integer "status", default: 0, null: false
+    t.date "started_on"
+    t.date "ended_on"
+    t.integer "monthly_rate_cents"
+    t.text "notes"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["course_offering_id", "student_id"], name: "index_enrollments_on_course_offering_id_and_student_id", unique: true
+    t.index ["course_offering_id"], name: "index_enrollments_on_course_offering_id"
+    t.index ["student_id"], name: "index_enrollments_on_student_id"
   end
 
   create_table "parent_contacts", force: :cascade do |t|
@@ -86,5 +101,7 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_24_183854) do
 
   add_foreign_key "course_offerings", "courses"
   add_foreign_key "course_offerings", "teachers"
+  add_foreign_key "enrollments", "course_offerings"
+  add_foreign_key "enrollments", "students"
   add_foreign_key "parent_contacts", "students"
 end

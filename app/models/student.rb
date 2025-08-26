@@ -1,5 +1,8 @@
 class Student < ApplicationRecord
   has_many :parent_contacts, dependent: :destroy
+  has_many :enrollments, dependent: :destroy
+  has_many :course_offerings, through: :enrollments
+
   accepts_nested_attributes_for :parent_contacts, allow_destroy: true
 
   # student_type
