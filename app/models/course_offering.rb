@@ -2,6 +2,9 @@ class CourseOffering < ApplicationRecord
   belongs_to :course
   belongs_to :teacher
 
+  has_many :enrollments, dependent: :destroy
+  has_many :students, through: :enrollments
+
   # Optional enums if you added them earlier:
   enum :day_of_week, {
     sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
