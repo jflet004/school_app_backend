@@ -13,4 +13,10 @@ class Enrollment < ApplicationRecord
   def default_monthly_rate
     self.monthly_rate_cents ||= course_offering.course.price_cents if course_offering&.course
   end
+
+  def charge_cents_for(year:, month:)
+    per_class = monthly_rate_cents || course_offering.course.price_cents
+    classes_in_month = course_offering.occurrences_in_month(year, month)
+    per_class.to_i * classes_in_month
+  end
 end
