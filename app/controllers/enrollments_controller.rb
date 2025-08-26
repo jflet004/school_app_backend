@@ -13,20 +13,27 @@ class EnrollmentsController < ApplicationController
 
   # POST /course_offerings/:course_offering_id/enrollments
   # Body: { enrollment: { student_id, status?, started_on?, monthly_rate_cents? } }
-def create
+  def create
     enrollment = nil
 
     Enrollment.transaction do
-      # Lock the offering row to serialize capacity checks
+      # Serialize capacity checks
       @course_offering.lock!
 
-      if @course_offering.capacity.present? &&
-         @course_offering.enrollments.active.count >= @course_offering.capacity
-        render json: { errors: ["This class is full (capacity #{@course_offering.capacity})."] },
-               status: :unprocessable_content and return
+      if @course_offering.capacity.present?
+        active_val = Enrollment.respond_to?(:statuses) ? Enrollment.statuses['active'] : 0
+        active_count = @course_offering.enrollments
+                                       .where('status = ? OR status IS NULL', active_val)
+                                       .count
+        if active_count >= @course_offering.capacity
+          render json: { errors: ["This class is full (capacity #{@course_offering.capacity})."] },
+                 status: :unprocessable_content and return
+        end
       end
 
       enrollment = @course_offering.enrollments.new(enrollment_params)
+      # default status to active if omitted / nil
+      enrollment.status ||= :active
 
       unless enrollment.save
         render json: { errors: enrollment.errors.full_messages },

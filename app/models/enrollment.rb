@@ -24,10 +24,15 @@ class Enrollment < ApplicationRecord
 
    private
 
-  def offering_has_capacity
+def offering_has_capacity
     return if course_offering.nil? || course_offering.capacity.blank?
-    if course_offering.active_enrollments_count >= course_offering.capacity
+    # Count active + NULL as active
+    active_val = Enrollment.respond_to?(:statuses) ? Enrollment.statuses['active'] : 0
+    active_count = course_offering.enrollments
+                                 .where('status = ? OR status IS NULL', active_val)
+                                 .count
+    if active_count >= course_offering.capacity
       errors.add(:base, "This class is full (capacity reached).")
     end
-  end
+end
 end

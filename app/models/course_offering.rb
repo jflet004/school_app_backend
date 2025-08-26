@@ -11,6 +11,16 @@ class CourseOffering < ApplicationRecord
   }, prefix: true, allow_nil: true
 
   # ---- capacity helpers ----
+  
+  def active_status_value
+    Enrollment.respond_to?(:statuses) ? Enrollment.statuses['active'] : 0
+  end
+
+  def active_enrollments_relation
+    # Treat NULL as active to be defensive with legacy rows
+    enrollments.where('status = ? OR status IS NULL', active_status_value)
+  end
+  
   def active_enrollments_count
     enrollments.active.count
   end
