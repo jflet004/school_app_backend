@@ -32,9 +32,17 @@ end
   
 
   # GET /teachers/:id
-  def show
-    render json: @teacher.as_json(include: :courses)
+def show
+  teacher = Teacher.includes(course_offerings: [:course]).find(params[:id])
+
+  data = teacher.as_json
+  data["course_offerings"] = teacher.course_offerings.map do |o|
+    o.as_json(include: :course).merge("enrollments_count" => o.enrollments.size)
   end
+
+  render json: data
+end
+
 
   # POST /teachers
   def create
