@@ -150,13 +150,17 @@ end
       nil
     end
 
-    def self.normalize_attendance(v)
-      case v.to_s.strip.downcase
-      when "present", "p", "attended", "yes", "y" then :present
-      when "absent", "a", "no", "n", "missed"     then :absent
-      when "excused", "e"                         then :excused
-      else :unknown
-      end
-    end
+def self.normalize_attendance(v)
+  s = v.to_s.downcase.strip
+  return :unknown if s.empty?
+
+  # collapse rich labels to 3 buckets
+  return :present   if s.include?("present")      # "present", "present, late", etc.
+  return :absent    if s.include?("absent")       # "absent, no make-up", "absent, notice given"
+  return :unknown   if s.include?("unrecorded")   # treat as unrecorded bucket
+
+  :unknown
+end
+
   end
 end
