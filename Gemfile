@@ -13,6 +13,8 @@ gem "puma", ">= 5.0"
 
 gem "caxlsx", "~> 4.0"
 
+gem "roo" #read .xlsx/.xls
+
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
 # gem "jbuilder"
 
