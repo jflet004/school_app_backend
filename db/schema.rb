@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_08_26_063249) do
+ActiveRecord::Schema[7.1].define(version: 2025_08_26_081047) do
   create_table "active_storage_attachments", force: :cascade do |t|
     t.string "name", null: false
     t.string "record_type", null: false
@@ -37,6 +37,18 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_26_063249) do
     t.bigint "blob_id", null: false
     t.string "variation_digest", null: false
     t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true
+  end
+
+  create_table "attendance_events", force: :cascade do |t|
+    t.integer "course_offering_id", null: false
+    t.integer "student_id", null: false
+    t.date "on_date"
+    t.integer "status"
+    t.string "raw_time"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["course_offering_id"], name: "index_attendance_events_on_course_offering_id"
+    t.index ["student_id"], name: "index_attendance_events_on_student_id"
   end
 
   create_table "course_offerings", force: :cascade do |t|
@@ -85,6 +97,27 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_26_063249) do
     t.json "metadata"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+  end
+
+  create_table "import_facts", force: :cascade do |t|
+    t.integer "import_batch_id", null: false
+    t.string "teacher_name", null: false
+    t.string "course_name", null: false
+    t.string "student_name", null: false
+    t.date "on_date", null: false
+    t.string "start_time"
+    t.string "end_time"
+    t.string "room"
+    t.integer "attendance_status", default: 3, null: false
+    t.json "raw"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["course_name", "on_date"], name: "index_import_facts_on_course_name_and_on_date"
+    t.index ["import_batch_id", "teacher_name", "student_name", "course_name", "on_date", "start_time", "end_time", "room", "attendance_status"], name: "idx_import_facts_unique_per_batch_row", unique: true
+    t.index ["import_batch_id"], name: "index_import_facts_on_import_batch_id"
+    t.index ["on_date"], name: "index_import_facts_on_on_date"
+    t.index ["teacher_name", "on_date"], name: "index_import_facts_on_teacher_name_and_on_date"
+    t.index ["teacher_name", "student_name", "course_name", "on_date", "start_time", "end_time", "room"], name: "idx_import_facts_global_unique_row", unique: true
   end
 
   create_table "parent_contacts", force: :cascade do |t|
@@ -143,9 +176,12 @@ ActiveRecord::Schema[7.1].define(version: 2025_08_26_063249) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "attendance_events", "course_offerings"
+  add_foreign_key "attendance_events", "students"
   add_foreign_key "course_offerings", "courses"
   add_foreign_key "course_offerings", "teachers"
   add_foreign_key "enrollments", "course_offerings"
   add_foreign_key "enrollments", "students"
+  add_foreign_key "import_facts", "import_batches"
   add_foreign_key "parent_contacts", "students"
 end

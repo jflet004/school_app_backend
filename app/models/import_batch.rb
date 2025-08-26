@@ -1,7 +1,9 @@
 class ImportBatch < ApplicationRecord
   has_one_attached :file
 
-  enum status: { pending: 0, parsed: 1, committed: 2, failed: 3 }
+  has_many :import_facts, dependent: :delete_all
+
+  enum status: { pending: 0, parsed: 1, imported: 2, failed: 3 }, _prefix: true
   validates :source, presence: true
 
   # Simple metadata helpers
