@@ -69,9 +69,12 @@ class CourseOfferingsController < ApplicationController
 
   # GET /course_offerings/:id
   # GET /teachers/:teacher_id/course_offerings/:id
-  def show
-    render json: @offering.as_json(include: { course: {}, teacher: {} })
-  end
+def show
+  off = @offering.as_json(include: { course: {}, teacher: {} })
+  off[:enrollments_count] = @offering.enrollments.count
+  render json: off
+end
+
 
   # POST /teachers/:teacher_id/course_offerings
   # (or top-level with :teacher_id in params)
