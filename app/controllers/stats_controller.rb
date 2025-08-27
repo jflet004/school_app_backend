@@ -91,4 +91,81 @@ end
       params: { from:, to:, fy_start: fy_start }
     }
   end
+
+
+  def bonus
+    month_param  = params[:month]
+    week_start_s = (params[:week_start].presence || "sunday").downcase
+    week_start_s = %w[sunday monday].include?(week_start_s) ? week_start_s : "sunday"
+
+    month_start =
+      if month_param.present?
+        y, m = month_param.split("-", 2).map!(&:to_i)
+        Date.new(y, m, 1) rescue nil
+      end
+    month_start ||= Date.today.beginning_of_month
+    month_end    = month_start.end_of_month
+
+    # helper lambdas
+    wk_start = lambda do |d|
+      if week_start_s == "sunday"
+        d - d.wday # 0..6 with 0 = Sun
+      else
+        # Monday = 1
+        delta = (d.wday - 1) % 7
+        d - delta
+      end
+    end
+
+    # All week starts that intersect the month; include empty weeks for averaging
+    weeks = []
+    d = wk_start.call(month_start)
+    while d <= month_end
+      weeks << d
+      d += 7
+    end
+
+    # Pull facts for the range, only for INDIVIDUAL courses
+    # join by name (case-insensitive) to Courses to determine course_type
+    facts = ImportFact.
+      joins("LEFT JOIN courses ON lower(courses.name)=lower(import_facts.course_name)").
+      where(on_date: month_start..month_end).
+      where("courses.course_type = ?", Course.course_types[:individual]).
+      pluck("import_facts.teacher_name", "import_facts.student_name", "import_facts.on_date", "import_facts.course_name")
+
+    # Build: teacher => { courses:Set, week=>Set(students) }
+    per_teacher = Hash.new { |h,k| h[k] = { courses: Set.new, weeks: Hash.new { |hh,kk| hh[kk] = Set.new } } }
+
+    facts.each do |teacher, student, on_date, course|
+      ws = wk_start.call(on_date)
+      t  = per_teacher[teacher]
+      t[:courses] << course
+      t[:weeks][ws] << student
+    end
+
+    # Render rows
+    rows = per_teacher.map do |teacher, data|
+      week_counts = weeks.map { |ws| { week_start: ws, count: data[:weeks][ws].size } }
+      total       = week_counts.sum { |w| w[:count] }
+      avg         = weeks.any? ? (total.to_f / weeks.size) : 0.0
+      weeks_ge20  = week_counts.count { |w| w[:count] >= 20 }
+      qualifies   = weeks_ge20 >= 3
+
+      {
+        teacher: teacher,
+        courses: data[:courses].to_a.sort,
+        weekly_counts: week_counts.map { |w| { week: w[:week_start].to_s, count: w[:count] } },
+        avg_per_week: avg.round(2),
+        weeks_ge_20: weeks_ge20,
+        qualifies: qualifies
+      }
+    end
+
+    render json: {
+      month: month_start.strftime("%Y-%m"),
+      week_start: week_start_s,
+      weeks: weeks.map(&:to_s),
+      teachers: rows.sort_by { |r| [r[:qualifies] ? 0 : 1, r[:teacher].downcase] } # qualifiers first
+    }
+  end
 end
