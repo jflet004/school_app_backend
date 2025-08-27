@@ -127,39 +127,40 @@ end
 
     # Pull facts for the range, only for INDIVIDUAL courses
     # join by name (case-insensitive) to Courses to determine course_type
-    facts = ImportFact.
-      joins("LEFT JOIN courses ON lower(courses.name)=lower(import_facts.course_name)").
-      where(on_date: month_start..month_end).
-      where("courses.course_type = ?", Course.course_types[:individual]).
-      pluck("import_facts.teacher_name", "import_facts.student_name", "import_facts.on_date", "import_facts.course_name")
+    require "set"
 
-    # Build: teacher => { courses:Set, week=>Set(students) }
-    per_teacher = Hash.new { |h,k| h[k] = { courses: Set.new, weeks: Hash.new { |hh,kk| hh[kk] = Set.new } } }
+facts = ImportFact
+  .joins("LEFT JOIN courses ON lower(courses.name)=lower(import_facts.course_name)")
+  .where(on_date: month_start..month_end)
+  .where("courses.course_type = ?", Course.course_types[:individual])
+  .pluck("import_facts.teacher_name", "import_facts.on_date", "import_facts.course_name")
 
-    facts.each do |teacher, student, on_date, course|
-      ws = wk_start.call(on_date)
-      t  = per_teacher[teacher]
-      t[:courses] << course
-      t[:weeks][ws] << student
-    end
+# teacher => { courses:Set, weeks => { week_start_date => Integer count } }
+per_teacher = Hash.new { |h, k| h[k] = { courses: Set.new, weeks: Hash.new(0) } }
 
-    # Render rows
-    rows = per_teacher.map do |teacher, data|
-      week_counts = weeks.map { |ws| { week_start: ws, count: data[:weeks][ws].size } }
-      total       = week_counts.sum { |w| w[:count] }
-      avg         = weeks.any? ? (total.to_f / weeks.size) : 0.0
-      weeks_ge20  = week_counts.count { |w| w[:count] >= 20 }
-      qualifies   = weeks_ge20 >= 3
+facts.each do |teacher, on_date, course|
+  week_key = wk_start.call(on_date)
+  t = per_teacher[teacher]
+  t[:courses] << course
+  t[:weeks][week_key] += 1       # <-- count lessons, not unique students
+end
 
-      {
-        teacher: teacher,
-        courses: data[:courses].to_a.sort,
-        weekly_counts: week_counts.map { |w| { week: w[:week_start].to_s, count: w[:count] } },
-        avg_per_week: avg.round(2),
-        weeks_ge_20: weeks_ge20,
-        qualifies: qualifies
-      }
-    end
+rows = per_teacher.map do |teacher, data|
+  week_counts = weeks.map { |ws| { week_start: ws, count: data[:weeks][ws] || 0 } }
+  total       = week_counts.sum { |w| w[:count] }
+  avg         = weeks.any? ? (total.to_f / weeks.size) : 0.0
+  weeks_ge20  = week_counts.count { |w| w[:count] >= 20 }
+  qualifies   = weeks_ge20 >= 3
+
+  {
+    teacher: teacher,
+    courses: data[:courses].to_a.sort,
+    weekly_counts: week_counts.map { |w| { week: w[:week_start].to_s, count: w[:count] } },
+    avg_per_week: avg.round(2),
+    weeks_ge_20: weeks_ge20,
+    qualifies: qualifies
+  }
+end
 
     render json: {
       month: month_start.strftime("%Y-%m"),
