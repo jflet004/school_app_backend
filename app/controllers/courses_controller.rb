@@ -24,7 +24,7 @@ class CoursesController < ApplicationController
     courses     = scope.offset(offset).limit(per_page)
 
     render json: {
-      data: courses.as_json(only: [:id, :name, :course_type, :price_cents, :active, :created_at, :updated_at]),
+      data: courses.as_json(only: [:id, :name, :department, :course_type, :price_cents, :active, :created_at, :updated_at]),
       meta: { page:, per_page:, total:, total_pages: }
     }
   end
@@ -61,11 +61,14 @@ class CoursesController < ApplicationController
 
   private
 
+def course_params
+  
+  params.require(:course).permit(
+    :name, :price_cents_per_session, :course_type, :department, :teacher_id
+  )
+end
+
   def set_course
     @course = Course.find(params[:id])
-  end
-
-  def course_params
-    params.require(:course).permit(:name, :course_type, :price_cents, :active)
   end
 end
