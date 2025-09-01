@@ -12,63 +12,63 @@ class StatsController < ApplicationController
         totals: { period: nil, sessions: 0, present: 0, absent: 0, unknown: 0 },
         fiscal_years: {},
         quarters: {},
-        params: { from:, to:, fy_start: fy_start }
-     }
+        params: { from: from, to: to, fy_start: fy_start }
+      }
     end
-
-    return render json: { series: [], total: { sessions: 0 } } unless from && to
 
     scope = ImportFact.where(on_date: from..to)
     scope = scope.where("teacher_name LIKE ?", "%#{params[:teacher]}%") if params[:teacher].present?
     scope = scope.where("course_name  LIKE ?", "%#{params[:course]}%")  if params[:course].present?
 
     # SQLite strftime('%Y-%m', on_date) -> "2025-07"
-    month_key = Arel.sql("strftime('%Y-%m', on_date) AS period")
+    month_key  = Arel.sql("strftime('%Y-%m', on_date) AS period")
+    present_cnt = Arel.sql("SUM(CASE WHEN attendance_status = 0 THEN 1 ELSE 0 END) AS present")
+    absent_cnt  = Arel.sql("SUM(CASE WHEN attendance_status IN (1,2) THEN 1 ELSE 0 END) AS absent")  # include excused if ever used
+    unknown_cnt = Arel.sql("SUM(CASE WHEN attendance_status = 3 THEN 1 ELSE 0 END) AS unknown")
+    total_cnt   = Arel.sql("COUNT(*) AS sessions")
 
-  present_cnt = Arel.sql("SUM(CASE WHEN attendance_status = 0 THEN 1 ELSE 0 END) AS present")
-  absent_cnt  = Arel.sql("SUM(CASE WHEN attendance_status IN (1,2) THEN 1 ELSE 0 END) AS absent")  # include excused if ever used
-  unknown_cnt = Arel.sql("SUM(CASE WHEN attendance_status = 3 THEN 1 ELSE 0 END) AS unknown")
-  total_cnt   = Arel.sql("COUNT(*) AS sessions")
+    rows = scope
+      .select(month_key, present_cnt, absent_cnt, unknown_cnt, total_cnt)
+      .group("strftime('%Y-%m', on_date)")
+      .order("period ASC")
 
+    series = rows.map do |r|
+      {
+        period:   r.period,
+        sessions: r.sessions.to_i,
+        present:  r.present.to_i,
+        absent:   r.absent.to_i,
+        unknown:  r.unknown.to_i
+      }
+    end
 
-  rows = scope
-    .select(month_key, present_cnt, absent_cnt, unknown_cnt, total_cnt)
-    .group("strftime('%Y-%m', on_date)")
-    .order("period ASC")
+    # --- school terms helper (Spring Jan–Apr, Summer May–Aug, Winter Sep–Dec) ---
+    def school_term_label_for(year, month)
+      case month
+      when 1..4  then "Spring #{year}"
+      when 5..8  then "Summer #{year}"
+      else            "Winter #{year}"
+      end
+    end
 
-  series = rows.map do |r|
-    { period: r.period, sessions: r.sessions.to_i,
-      present: r.present.to_i, absent: r.absent.to_i, unknown: r.unknown.to_i }    end
+    # --- aggregate by school term (returned under `quarters` key for compatibility) ---
+    quarters = Hash.new { |h, k| h[k] = { sessions: 0, present: 0, absent: 0, unknown: 0 } }
 
-def fiscal_quarter_for(year, month, fy_start)
-  # Map months to 0..11 where fy_start == 0
-  offset = (month - fy_start) % 12
-  qnum   = (offset / 3) + 1 # 1..4
-  fy     = month >= fy_start ? year : year - 1
-  [fy, qnum]
-end
+    series.each do |r|
+      y, m = r[:period].split("-").map(&:to_i) # "YYYY-MM"
+      key = school_term_label_for(y, m)        # e.g., "Winter 2025"
+      agg = quarters[key]
+      agg[:sessions] += r[:sessions]
+      agg[:present]  += r[:present]
+      agg[:absent]   += r[:absent]
+      agg[:unknown]  += r[:unknown]
+    end
 
-# --- aggregate by fiscal quarter ---
-quarters = Hash.new { |h, k|
-  h[k] = { sessions: 0, present: 0, absent: 0, unknown: 0 }
-}
-
-series.each do |r|
-  y, m = r[:period].split("-").map(&:to_i) # "YYYY-MM"
-  fy, q = fiscal_quarter_for(y, m, fy_start.to_i)
-  key = "FY#{fy}-Q#{q}"
-  agg = quarters[key]
-  agg[:sessions] += r[:sessions]
-  agg[:present]  += r[:present]
-  agg[:absent]   += r[:absent]
-  agg[:unknown]  += r[:unknown]
-end
-
-    # Quick fiscal-year buckets (Aug–Jul by default)
+    # Quick fiscal-year buckets (Aug–Jul by default) — unchanged
     fy = series.group_by { |r|
       y, m = r[:period].split("-").map(&:to_i)
       fy_year = (m >= fy_start) ? y : (y - 1)
-      "FY#{fy_year}-#{(fy_year + 1).to_s[-2,2]}"
+      "FY#{fy_year}-#{(fy_year + 1).to_s[-2, 2]}"
     }.transform_values { |arr|
       {
         sessions: arr.sum { _1[:sessions] },
@@ -87,11 +87,10 @@ end
         unknown:  series.sum { _1[:unknown]  }
       },
       fiscal_years: fy,
-      quarters: quarters,
-      params: { from:, to:, fy_start: fy_start }
+      quarters: quarters, # now holds Spring/Summer/Winter buckets
+      params: { from: from, to: to, fy_start: fy_start }
     }
   end
-
 
   def bonus
     month_param  = params[:month]
@@ -125,42 +124,40 @@ end
       d += 7
     end
 
-    # Pull facts for the range, only for INDIVIDUAL courses
-    # join by name (case-insensitive) to Courses to determine course_type
     require "set"
 
-facts = ImportFact
-  .joins("LEFT JOIN courses ON lower(courses.name)=lower(import_facts.course_name)")
-  .where(on_date: month_start..month_end)
-  .where("courses.course_type = ?", Course.course_types[:individual])
-  .pluck("import_facts.teacher_name", "import_facts.on_date", "import_facts.course_name")
+    facts = ImportFact
+      .joins("LEFT JOIN courses ON lower(courses.name)=lower(import_facts.course_name)")
+      .where(on_date: month_start..month_end)
+      .where("courses.course_type = ?", Course.course_types[:individual])
+      .pluck("import_facts.teacher_name", "import_facts.on_date", "import_facts.course_name")
 
-# teacher => { courses:Set, weeks => { week_start_date => Integer count } }
-per_teacher = Hash.new { |h, k| h[k] = { courses: Set.new, weeks: Hash.new(0) } }
+    # teacher => { courses:Set, weeks => { week_start_date => Integer count } }
+    per_teacher = Hash.new { |h, k| h[k] = { courses: Set.new, weeks: Hash.new(0) } }
 
-facts.each do |teacher, on_date, course|
-  week_key = wk_start.call(on_date)
-  t = per_teacher[teacher]
-  t[:courses] << course
-  t[:weeks][week_key] += 1       # <-- count lessons, not unique students
-end
+    facts.each do |teacher, on_date, course|
+      week_key = wk_start.call(on_date)
+      t = per_teacher[teacher]
+      t[:courses] << course
+      t[:weeks][week_key] += 1       # count lessons, not unique students
+    end
 
-rows = per_teacher.map do |teacher, data|
-  week_counts = weeks.map { |ws| { week_start: ws, count: data[:weeks][ws] || 0 } }
-  total       = week_counts.sum { |w| w[:count] }
-  avg         = weeks.any? ? (total.to_f / weeks.size) : 0.0
-  weeks_ge20  = week_counts.count { |w| w[:count] >= 20 }
-  qualifies   = weeks_ge20 >= 3
+    rows = per_teacher.map do |teacher, data|
+      week_counts = weeks.map { |ws| { week_start: ws, count: data[:weeks][ws] || 0 } }
+      total       = week_counts.sum { |w| w[:count] }
+      avg         = weeks.any? ? (total.to_f / weeks.size) : 0.0
+      weeks_ge20  = week_counts.count { |w| w[:count] >= 20 }
+      qualifies   = weeks_ge20 >= 3
 
-  {
-    teacher: teacher,
-    courses: data[:courses].to_a.sort,
-    weekly_counts: week_counts.map { |w| { week: w[:week_start].to_s, count: w[:count] } },
-    avg_per_week: avg.round(2),
-    weeks_ge_20: weeks_ge20,
-    qualifies: qualifies
-  }
-end
+      {
+        teacher: teacher,
+        courses: data[:courses].to_a.sort,
+        weekly_counts: week_counts.map { |w| { week: w[:week_start].to_s, count: w[:count] } },
+        avg_per_week: avg.round(2),
+        weeks_ge_20: weeks_ge20,
+        qualifies: qualifies
+      }
+    end
 
     render json: {
       month: month_start.strftime("%Y-%m"),
