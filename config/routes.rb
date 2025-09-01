@@ -32,5 +32,6 @@ Rails.application.routes.draw do
 
   get "/stats/attendance", to: "stats#attendance"
   get "stats/bonus", to: "stats#bonus"
+  get "stats/options", to: "stats#options"
   
 end

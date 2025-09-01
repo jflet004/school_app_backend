@@ -185,4 +185,20 @@ def bonus
   }
 end
 
+def options
+    scope = ImportFact.all
+
+    # (optional) allow narrowing by date window to keep lists tidy
+    if params[:from].present? && params[:to].present?
+      from = Date.parse(params[:from]) rescue nil
+      to   = Date.parse(params[:to])   rescue nil
+      scope = scope.where(on_date: from..to) if from && to
+    end
+
+    teachers = scope.distinct.order(:teacher_name).pluck(:teacher_name).reject(&:blank?)
+    courses  = scope.distinct.order(:course_name).pluck(:course_name).reject(&:blank?)
+
+    render json: { teachers:, courses: }
+end
+
 end

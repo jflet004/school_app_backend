@@ -24,6 +24,18 @@ class Student < ApplicationRecord
     five_plus: 3   # "5+"
   }
 
+    EXPERIENCE_LABELS = {
+    "zero"        => "0",
+    "one_two"     => "1–2",
+    "three_four"  => "3–4",
+    "five_plus"   => "5+"
+  }.freeze
+
+  def experience_years_label
+    exp = experience_years # enum returns the key as a string, e.g. "one_two"
+    exp.present? ? EXPERIENCE_LABELS[exp] : nil
+  end
+
   # ethnicity
   enum ethnicity: {
     hispanic_latino: 0,

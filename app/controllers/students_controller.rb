@@ -33,7 +33,7 @@ class StudentsController < ApplicationController
     students    = scope.offset(offset).limit(per_page)
 
     render json: {
-      data: students.as_json(include: :parent_contacts),
+      data: students.as_json(include: :parent_contacts, methods: [:experience_years_label]),
       meta: { page:, per_page:, total:, total_pages: }
     }
   end
@@ -43,15 +43,17 @@ def show
     include: [
       :parent_contacts,
       { enrollments: { include: { course_offering: { include: [:course, :teacher] } } } }
-    ]
+    ],
+    methods: [:experience_years_label]
   )
 end
+
 
 
   def create
     student = Student.new(student_params)
     if student.save
-      render json: student.as_json(include: :parent_contacts), status: :created
+      render json: student.as_json(include: :parent_contacts, methods: [:experience_years_label]), status: :created
     else
       render json: { errors: student.errors.full_messages }, status: :unprocessable_content
     end
@@ -59,7 +61,7 @@ end
 
   def update
     if @student.update(student_params)
-      render json: @student.as_json(include: :parent_contacts)
+      render json: @student.as_json(include: :parent_contacts, methods: [:experience_years_label])
     else
       render json: { errors: @student.errors.full_messages }, status: :unprocessable_content
     end
