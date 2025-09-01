@@ -92,78 +92,97 @@ class StatsController < ApplicationController
     }
   end
 
-  def bonus
-    month_param  = params[:month]
-    week_start_s = (params[:week_start].presence || "sunday").downcase
-    week_start_s = %w[sunday monday].include?(week_start_s) ? week_start_s : "sunday"
+def bonus
+  month_param  = params[:month]
+  week_start_s = (params[:week_start].presence || "sunday").downcase
+  week_start_s = %w[sunday monday].include?(week_start_s) ? week_start_s : "sunday"
 
-    month_start =
-      if month_param.present?
-        y, m = month_param.split("-", 2).map!(&:to_i)
-        Date.new(y, m, 1) rescue nil
-      end
-    month_start ||= Date.today.beginning_of_month
-    month_end    = month_start.end_of_month
+  month_start =
+    if month_param.present?
+      y, m = month_param.split("-", 2).map!(&:to_i)
+      Date.new(y, m, 1) rescue nil
+    end
+  month_start ||= Date.today.beginning_of_month
+  month_end    = month_start.end_of_month
 
-    # helper lambdas
-    wk_start = lambda do |d|
-      if week_start_s == "sunday"
-        d - d.wday # 0..6 with 0 = Sun
+  # helper lambdas
+  wk_start = lambda do |d|
+    if week_start_s == "sunday"
+      d - d.wday # 0..6 with 0 = Sun
+    else
+      # Monday = 1
+      delta = (d.wday - 1) % 7
+      d - delta
+    end
+  end
+
+  # All week starts that intersect the month; include empty weeks for averaging
+  weeks = []
+  d = wk_start.call(month_start)
+  while d <= month_end
+    weeks << d
+    d += 7
+  end
+
+  require "set"
+
+  # --- NEW: build a teacher-name -> email map (supports name or first/last) ---
+  teacher_email_by_name = {}
+  Teacher.find_each do |t|
+    display_name =
+      if t.respond_to?(:name) && t.name.present?
+        t.name
       else
-        # Monday = 1
-        delta = (d.wday - 1) % 7
-        d - delta
+        [t.try(:first_name), t.try(:last_name)].compact.join(" ")
       end
-    end
+    key = display_name.to_s.downcase.gsub(/\s+/, " ").strip
+    teacher_email_by_name[key] = t.try(:email)
+  end
 
-    # All week starts that intersect the month; include empty weeks for averaging
-    weeks = []
-    d = wk_start.call(month_start)
-    while d <= month_end
-      weeks << d
-      d += 7
-    end
+  # Pull facts for the range, only for INDIVIDUAL courses
+  facts = ImportFact
+    .joins("LEFT JOIN courses ON lower(courses.name)=lower(import_facts.course_name)")
+    .where(on_date: month_start..month_end)
+    .where("courses.course_type = ?", Course.course_types[:individual])
+    .pluck("import_facts.teacher_name", "import_facts.on_date", "import_facts.course_name")
 
-    require "set"
+  # teacher => { email:String|nil, courses:Set, weeks => { week_start_date => Integer count } }
+  per_teacher = Hash.new { |h, k| h[k] = { email: nil, courses: Set.new, weeks: Hash.new(0) } }
 
-    facts = ImportFact
-      .joins("LEFT JOIN courses ON lower(courses.name)=lower(import_facts.course_name)")
-      .where(on_date: month_start..month_end)
-      .where("courses.course_type = ?", Course.course_types[:individual])
-      .pluck("import_facts.teacher_name", "import_facts.on_date", "import_facts.course_name")
+  facts.each do |teacher, on_date, course|
+    week_key = wk_start.call(on_date)
+    t = per_teacher[teacher]
+    norm = teacher.to_s.downcase.gsub(/\s+/, " ").strip
+    t[:email] ||= teacher_email_by_name[norm]       # <- set email from map
+    t[:courses] << course
+    t[:weeks][week_key] += 1                        # count lessons, not unique students
+  end
 
-    # teacher => { courses:Set, weeks => { week_start_date => Integer count } }
-    per_teacher = Hash.new { |h, k| h[k] = { courses: Set.new, weeks: Hash.new(0) } }
+  rows = per_teacher.map do |teacher, data|
+    week_counts = weeks.map { |ws| { week_start: ws, count: data[:weeks][ws] || 0 } }
+    total       = week_counts.sum { |w| w[:count] }
+    avg         = weeks.any? ? (total.to_f / weeks.size) : 0.0
+    avg_floor   = avg.floor
+    weeks_ge20  = week_counts.count { |w| w[:count] >= 20 }
+    qualifies   = weeks_ge20 >= 3
 
-    facts.each do |teacher, on_date, course|
-      week_key = wk_start.call(on_date)
-      t = per_teacher[teacher]
-      t[:courses] << course
-      t[:weeks][week_key] += 1       # count lessons, not unique students
-    end
-
-    rows = per_teacher.map do |teacher, data|
-      week_counts = weeks.map { |ws| { week_start: ws, count: data[:weeks][ws] || 0 } }
-      total       = week_counts.sum { |w| w[:count] }
-      avg         = weeks.any? ? (total.to_f / weeks.size) : 0.0
-      weeks_ge20  = week_counts.count { |w| w[:count] >= 20 }
-      qualifies   = weeks_ge20 >= 3
-
-      {
-        teacher: teacher,
-        courses: data[:courses].to_a.sort,
-        weekly_counts: week_counts.map { |w| { week: w[:week_start].to_s, count: w[:count] } },
-        avg_per_week: avg.round(2),
-        weeks_ge_20: weeks_ge20,
-        qualifies: qualifies
-      }
-    end
-
-    render json: {
-      month: month_start.strftime("%Y-%m"),
-      week_start: week_start_s,
-      weeks: weeks.map(&:to_s),
-      teachers: rows.sort_by { |r| [r[:qualifies] ? 0 : 1, r[:teacher].downcase] } # qualifiers first
+    {
+      teacher: teacher,
+      email: data[:email],  # <- included in response
+      courses: data[:courses].to_a.sort,
+      weekly_counts: week_counts.map { |w| { week: w[:week_start].to_s, count: w[:count] } },
+      avg_per_week: avg_floor,
+      weeks_ge_20: weeks_ge20,
+      qualifies: qualifies
     }
   end
+
+  render json: {
+    month: month_start.strftime("%Y-%m"),
+    week_start: week_start_s,
+    weeks: weeks.map(&:to_s),
+    teachers: rows.sort_by { |r| [r[:qualifies] ? 0 : 1, r[:teacher].downcase] } # qualifiers first
+  }
+end
+
 end
